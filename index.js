@@ -1,10 +1,10 @@
 const puppeteer = require('puppeteer');
 
 const config = {
-	getIncognito: true,//performance + isolation between pages
+	getIncognito: false,//performance + isolation between pages
 	isHeadless: false,// browser GUI
 	emulate: {
-		doEmulate: true,
+		doEmulate: false,
 		deviceName: 'iPhone 8'
 	}
 };
@@ -12,20 +12,21 @@ const config = {
 (async () => {
 
 	console.log("hello");
-	let url = `https://www.imdb.com/title/tt1853728/?ref_=tt_sims_tti`;
+	let url = `https://www.amazon.in/`;
 
-	let browser = await puppeteer.launch({headless: config.isHeadless});
+	let browser = await puppeteer.launch({headless: config.isHeadless, args: ['--start-maximized']});
 
 	let page = await getPage(browser);
+	await page.setViewport({width:0, height:0});
 
 	await emulateDevice(page);
 
-	await page.goto(url, { waitUntil: 'networkidle2'});
+	await page.goto(url, { waitUntil: 'load'});
 
 	let data = await evaluateScrapingLogic(page);
 
 	console.log(data);
-	await browser.close();
+	//await browser.close();
 })();
 
 async function getPage(browser){
@@ -48,30 +49,17 @@ async function emulateDevice(page) {
 
 async function evaluateScrapingLogic(page) {
 
-	return page.evaluate(config.emulate.doEmulate ? getMobileDeviceSraping : getDesktopSraping );
-};
+	await page.$eval('#twotabsearchtextbox', el => el.value = 'boat');
 
-function getDesktopSraping() {
-	let title = document.querySelector('div.title_wrapper > h1').innerText;
-	let ratingValue = document.querySelector('span[itemprop="ratingValue"]').innerText;
-	let ratingCount = document.querySelector('span[itemprop="ratingCount"]').innerText;
+	await (await page.$('input[type="submit"]')).press('Enter'); // Enter Key
+	
+	await page.waitForSelector('div[data-asin][data-cel-widget]');
 
-	return {
-		title,
-		ratingValue,
-		ratingCount
-	}
-};
+	const products = await page.evaluate(() => 
+		Array.from(document.querySelectorAll('div[data-asin][data-cel-widget] h2'))
+			.map(p => p.innerText)
+		)
 
-function getMobileDeviceSraping() {
+	console.log(products);
 
-	let title = document.querySelector('.media-body > h1').innerText
-	let ratingValue = document.querySelector('#ratings-bar').innerText.split('\n')[0];
-	let ratingCount = document.querySelector('#ratings-bar').innerText.split('\n')[1].split(' ')[0];
-
-	return {
-		title,
-		ratingValue,
-		ratingCount
-	}
 };
