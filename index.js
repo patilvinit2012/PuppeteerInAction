@@ -11,7 +11,7 @@ const config = {
 
 (async () => {
 
-	console.log("hello");
+	console.log("hello"+new Date());
 	let url = `https://www.amazon.in/`;
 
 	let browser = await puppeteer.launch({headless: config.isHeadless, args: ['--start-maximized']});
@@ -53,13 +53,27 @@ async function evaluateScrapingLogic(page) {
 
 	await (await page.$('input[type="submit"]')).press('Enter'); // Enter Key
 	
-	await page.waitForSelector('div[data-asin][data-cel-widget]');
+	const PRODUCT_SELECTOR = 'div[data-asin][data-cel-widget] h2';
+	await page.waitForSelector(PRODUCT_SELECTOR);
 
-	const products = await page.evaluate(() => 
-		Array.from(document.querySelectorAll('div[data-asin][data-cel-widget] h2'))
-			.map(p => p.innerText)
-		)
-
-	console.log(products);
-
+	const products1 = await page.evaluate(() => {
+			var name = Array.from(document.querySelectorAll('div[data-asin][data-cel-widget] h2'))
+				.map(p => p.innerText);
+			var price = Array.from(document.querySelectorAll('.a-price-whole'))
+				.map(p => p.innerText);
+				
+			var productDiv = Array.from(document.querySelectorAll('.a-price-whole'))
+				.map(s => {
+					return s.closest('div[data-asin][data-cel-widget]');
+					/*return Array.from(s.closest('div[data-asin][data-cel-widget]').querySelectorAll('h2'))
+					.map(h2 => h2.innerText);*/
+				});
+			console.log(productDiv);
+			return {
+				name: name,
+				price: price
+			};
+		} 
+	)
+	console.log(products1);
 };
