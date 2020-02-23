@@ -1,5 +1,5 @@
 const puppeteer = require('puppeteer');
-
+const jQueryPath = require.resolve('jquery');
 const config = {
 	getIncognito: false,//performance + isolation between pages
 	isHeadless: false,// browser GUI
@@ -12,7 +12,7 @@ const config = {
 (async () => {
 
 	console.log("hello"+new Date());
-	let url = `https://www.amazon.in/`;
+	let url = `https://www.amazon.in`;
 
 	let browser = await puppeteer.launch({headless: config.isHeadless, args: ['--start-maximized']});
 
@@ -22,8 +22,10 @@ const config = {
 	await emulateDevice(page);
 
 	await page.goto(url, { waitUntil: 'load'});
+	//await page.addScriptTag({url: 'https://code.jquery.com/jquery-3.2.1.min.js'})
+	await page.addScriptTag({path: jQueryPath})
 
-	let data = await evaluateScrapingLogic(page);
+	let data = await evaluateScrapingLogic(page,url);
 
 	console.log(data);
 	//await browser.close();
@@ -47,7 +49,7 @@ async function emulateDevice(page) {
 	}
 };
 
-async function evaluateScrapingLogic(page) {
+async function evaluateScrapingLogic(page,url) {
 
 	await page.$eval('#twotabsearchtextbox', el => el.value = 'boat');
 
@@ -56,24 +58,38 @@ async function evaluateScrapingLogic(page) {
 	const PRODUCT_SELECTOR = 'div[data-asin][data-cel-widget] h2';
 	await page.waitForSelector(PRODUCT_SELECTOR);
 
-	const products1 = await page.evaluate(() => {
-			var name = Array.from(document.querySelectorAll('div[data-asin][data-cel-widget] h2'))
-				.map(p => p.innerText);
-			var price = Array.from(document.querySelectorAll('.a-price-whole'))
-				.map(p => p.innerText);
-				
-			var productDiv = Array.from(document.querySelectorAll('.a-price-whole'))
-				.map(s => {
-					return s.closest('div[data-asin][data-cel-widget]');
-					/*return Array.from(s.closest('div[data-asin][data-cel-widget]').querySelectorAll('h2'))
-					.map(h2 => h2.innerText);*/
-				});
-			console.log(productDiv);
-			return {
-				name: name,
-				price: price
-			};
-		} 
-	)
-	console.log(products1);
+	await page.addScriptTag({path: jQueryPath});
+
+	var amazonConfig = {
+		url: url,
+		includeSponsoredResults: true,
+	}
+	const products = await page.evaluate((amazonConfig) => {
+			
+			var searchResult = '[data-asin!=""]';
+			var sponsoredResults = '[data-asin]';
+			var listSelector = searchResult;
+
+			if(amazonConfig.includeSponsoredResults){
+				listSelector += sponsoredResults;
+			}
+			var selector = `div${listSelector}[data-cel-widget]`;
+			console.log(selector);
+			var productDiv = $('.a-price-whole').closest(selector);
+
+			const list = [];
+			$.each(productDiv,function(i,el){
+
+				var item = new Object();
+				item.price = $(el).find('.a-price-whole').text();
+				item.productName = $(el).find('h2').text().trim();
+				item.rating = $(el).find('.a-icon-alt').text().trim();
+				item.link = amazonConfig.url + $(el).find('a').attr('href');
+				list.push(item);
+				console.log(item);
+			})
+
+			return list;
+		}, amazonConfig)
+	console.log(products);
 };
