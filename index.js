@@ -8,10 +8,17 @@ const config = {
 		deviceName: 'iPhone 8'
 	}
 };
+class Product{
+  constructor(productName, price, rating, link) {    
+    this.productName = productName;
+    this.price = price;
+    this.rating = rating;
+    this.link = link;
+  }
+};
 
 (async () => {
 
-	console.log("hello"+new Date());
 	let url = `https://www.amazon.in`;
 
 	let browser = await puppeteer.launch({headless: config.isHeadless, args: ['--start-maximized']});
@@ -22,10 +29,15 @@ const config = {
 	await emulateDevice(page);
 
 	await page.goto(url, { waitUntil: 'load'});
-	//await page.addScriptTag({url: 'https://code.jquery.com/jquery-3.2.1.min.js'})
+	
 	await page.addScriptTag({path: jQueryPath})
 
 	let data = await evaluateScrapingLogic(page,url);
+
+	const targetProduct = new Product('boAt', '500');
+	data = filterTargetProduct(data, targetProduct);
+
+	data = filterByPrice(data, targetProduct.price);
 
 	console.log(data);
 	//await browser.close();
@@ -63,9 +75,18 @@ async function evaluateScrapingLogic(page,url) {
 	var amazonConfig = {
 		url: url,
 		includeSponsoredResults: true,
-	}
+	};
+	
 	const products = await page.evaluate((amazonConfig) => {
 			
+			class Product{
+			  constructor(productName, price, rating, link) {    
+			    this.productName = productName;
+			    this.price = price;
+			    this.rating = rating;
+			    this.link = link;
+			  }
+			};
 			var searchResult = '[data-asin!=""]';
 			var sponsoredResults = '[data-asin]';
 			var listSelector = searchResult;
@@ -80,16 +101,40 @@ async function evaluateScrapingLogic(page,url) {
 			const list = [];
 			$.each(productDiv,function(i,el){
 
-				var item = new Object();
-				item.price = $(el).find('.a-price-whole').text();
-				item.productName = $(el).find('h2').text().trim();
-				item.rating = $(el).find('.a-icon-alt').text().trim();
-				item.link = amazonConfig.url + $(el).find('a').attr('href');
-				list.push(item);
-				console.log(item);
+				const price = $(el).find('.a-price-whole').text();
+				const productName = $(el).find('h2').text().trim();
+				const rating = $(el).find('.a-icon-alt').text().trim();
+				const link = amazonConfig.url + $(el).find('a').attr('href');
+				
+				list.push(new Product(productName, price, rating, link));
 			})
 
 			return list;
 		}, amazonConfig)
-	console.log(products);
+	return products;
 };
+
+
+function filterTargetProduct(data,targetProduct){
+
+	return findByName(data,targetProduct.productName);
+}
+
+function findByName(data,productName){
+	return data
+		.filter(byProductName.bind(this, productName));
+}
+
+function byProductName(productName, product){
+	return product.productName.toLowerCase().includes(productName.toLowerCase());
+}
+
+function filterByPrice(data, targetPrice){
+	
+	return data.filter(product => {
+		
+		const productPriceInt = Number.parseInt(product.price.replace(',',''));
+		const targetPriceInt = Number.parseInt(targetPrice);
+		return productPriceInt < targetPriceInt;
+	});
+}
